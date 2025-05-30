@@ -321,7 +321,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       });
 
       if (_mapController != null && _userLocation != null) {
-        final adjustedLat = _userLocation!.latitude - 0.002;
+        final adjustedLat = _userLocation!.latitude - 0.004;
         _mapController!.move(latlng.LatLng(adjustedLat, _userLocation!.longitude), 14.0);
         await _fetchGasStations();
       }
@@ -808,7 +808,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _userLocation != null 
-                ? latlng.LatLng(_userLocation!.latitude - 0.002, _userLocation!.longitude)
+                ? latlng.LatLng(_userLocation!.latitude - 0.004, _userLocation!.longitude)
                 : latlng.LatLng(29.9773, 30.9456),
               initialZoom: 13.0,
             ),
@@ -890,7 +890,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
             ],
           ),
           Positioned(
-            bottom: 1,
+            bottom: 0,
             left: 0,
             right: 0,
             child: Container(
@@ -919,7 +919,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                             child: FutureBuilder<String>(
                               future: _getCarInfo(),
                               builder: (context, snapshot) {
-                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                if (snapshot.connectionState == ConnectionState.waiting && !_isCarInfoLoaded) {
                                   return const Text(
                                     'Loading car information...',
                                     style: TextStyle(
@@ -954,28 +954,11 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      // Row(
-                      //   children: [
-                      //     const Icon(Icons.ev_station,
-                      //         color: Colors.greenAccent),
-                      //     const SizedBox(width: 4),
-                      //     Text(
-                      //       localizations.get('charging_trucks'),
-                      //       style: const TextStyle(
-                      //         color: Colors.white,
-                      //         fontSize: 18,
-                      //         fontWeight: FontWeight.bold,
-                      //       ),
-                      //     ),
-                      //   ],
-                      // ),
-                      // const SizedBox(height: 8),
                       DropdownButton<String>(
                         value: _selectedService,
-                        icon: const Icon(Icons.arrow_drop_down,
-                            color: Colors.white),
-                        dropdownColor: Colors.white,
-                        style: const TextStyle(color: Colors.white),
+                        icon: const Icon(Icons.arrow_drop_down, color: Colors.greenAccent),
+                        dropdownColor: isDarkMode ? Colors.grey[900] : Colors.white,
+                        style: const TextStyle(color: Colors.greenAccent),
                         underline: Container(
                           height: 2,
                           color: Colors.greenAccent,
@@ -983,11 +966,9 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         onChanged: (String? newValue) {
                           setState(() {
                             _selectedService = newValue!;
-                            if (_selectedService !=
-                                localizations.get('select_service')) {
+                            if (_selectedService != localizations.get('select_service')) {
                               Fluttertoast.showToast(
-                                msg:
-                                    '${localizations.get('selected')}: $_selectedService',
+                                msg: '${localizations.get('selected')}: $_selectedService',
                                 toastLength: Toast.LENGTH_SHORT,
                                 gravity: ToastGravity.BOTTOM,
                                 backgroundColor: Colors.greenAccent,
@@ -1008,8 +989,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                             icon = Icons.battery_charging_full;
                           } else if (value == localizations.get('gasoline')) {
                             icon = Icons.local_gas_station;
-                          } else if (value ==
-                              localizations.get('light_maintenance')) {
+                          } else if (value == localizations.get('light_maintenance')) {
                             icon = Icons.build;
                           } else {
                             icon = Icons.list;
@@ -1021,7 +1001,10 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                               children: [
                                 Icon(icon, color: Colors.greenAccent, size: 20),
                                 const SizedBox(width: 8),
-                                Text(value),
+                                Text(
+                                  value,
+                                  style: const TextStyle(color: Colors.greenAccent),
+                                ),
                               ],
                             ),
                           );
