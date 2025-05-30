@@ -68,6 +68,53 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   final math.Random _random = math.Random();
   final List<String> _gasStationNames = ['Misr', 'Chillout', 'Total'];
   Timer? _debounceTimer;
+  
+  // Add cache for car information
+  String? _cachedCarInfo;
+  bool _isCarInfoLoaded = false;
+
+  // Add method to get car information
+  Future<String> _getCarInfo() async {
+    if (_isCarInfoLoaded && _cachedCarInfo != null) {
+      return _cachedCarInfo!;
+    }
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return 'No user logged in';
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!doc.exists) return 'No car data available';
+
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) return 'No car data available';
+
+      String carName = data['carName'] ?? data['car_name'] ?? '';
+      String carModel = data['car_model'] ?? '';
+      String displayText = '';
+
+      if (carName.isNotEmpty && carModel.isNotEmpty) {
+        displayText = '$carName - $carModel';
+      } else if (carName.isNotEmpty) {
+        displayText = carName;
+      } else if (carModel.isNotEmpty) {
+        displayText = carModel;
+      } else {
+        displayText = 'Unknown Car';
+      }
+
+      _cachedCarInfo = displayText;
+      _isCarInfoLoaded = true;
+      return displayText;
+    } catch (e) {
+      print('Error fetching car info: $e');
+      return 'Error loading car';
+    }
+  }
 
   @override
   void initState() {
@@ -257,8 +304,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
 
       setState(() {
         _userLocation = latlng.LatLng(position.latitude, position.longitude);
-        print(
-            'User location: ${_userLocation!.latitude}, ${_userLocation!.longitude}');
+        print('User location: ${_userLocation!.latitude}, ${_userLocation!.longitude}');
 
         _chargingTrucks[0]['lat'] = position.latitude + 0.005;
         _chargingTrucks[0]['lng'] = position.longitude + 0.005;
@@ -271,11 +317,12 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         _chargingTrucks[1]['baseLng'] = position.longitude - 0.005;
 
         _sortTrucksByDistance();
-        _locationController.text = 'Current User Location';
+        _locationController.text = '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
       });
 
       if (_mapController != null && _userLocation != null) {
-        _mapController!.move(_userLocation!, 14.0);
+        final adjustedLat = _userLocation!.latitude - 0.002;
+        _mapController!.move(latlng.LatLng(adjustedLat, _userLocation!.longitude), 14.0);
         await _fetchGasStations();
       }
     } catch (e) {
@@ -287,8 +334,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Error'),
-          content: const Text(
-              'An error occurred while fetching location. Please try again.'),
+          content: const Text('An error occurred while fetching location. Please try again.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -761,7 +807,9 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _userLocation ?? latlng.LatLng(29.9773, 30.9456),
+              initialCenter: _userLocation != null 
+                ? latlng.LatLng(_userLocation!.latitude - 0.002, _userLocation!.longitude)
+                : latlng.LatLng(29.9773, 30.9456),
               initialZoom: 13.0,
             ),
             children: [
@@ -868,15 +916,11 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                       Row(
                         children: [
                           Expanded(
-                            child: FutureBuilder<DocumentSnapshot>(
-                              future: FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(FirebaseAuth.instance.currentUser?.uid)
-                                  .get(),
+                            child: FutureBuilder<String>(
+                              future: _getCarInfo(),
                               builder: (context, snapshot) {
-                                if (snapshot.connectionState ==
-                                    ConnectionState.waiting) {
-                                  return Text(
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return const Text(
                                     'Loading car information...',
                                     style: TextStyle(
                                       color: Colors.white,
@@ -886,46 +930,16 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                                   );
                                 } else if (snapshot.hasError) {
                                   return Text(
-                                    localizations.get('error_loading_car'),
+                                    'Error: ${snapshot.error}',
                                     style: const TextStyle(
                                       color: Colors.red,
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   );
-                                } else if (snapshot.hasData &&
-                                    snapshot.data != null) {
-                                  final data = snapshot.data!.data()
-                                      as Map<String, dynamic>?;
-                                  String carName = data?['carName'] ??
-                                      data?['car_name'] ??
-                                      '';
-                                  String carModel = data?['car_model'] ?? '';
-                                  String displayText = '';
-
-                                  if (carName.isNotEmpty &&
-                                      carModel.isNotEmpty) {
-                                    displayText = '$carName - $carModel';
-                                  } else if (carName.isNotEmpty) {
-                                    displayText = carName;
-                                  } else if (carModel.isNotEmpty) {
-                                    displayText = carModel;
-                                  } else {
-                                    displayText =
-                                        localizations.get('unknown_car');
-                                  }
-
-                                  return Text(
-                                    displayText,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  );
                                 } else {
                                   return Text(
-                                    localizations.get('unknown_car'),
+                                    snapshot.data ?? 'Unknown Car',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 16,
@@ -1136,6 +1150,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     _mapController?.dispose();
     _truckMovementController.dispose();
     _locationController.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
   }
 }
